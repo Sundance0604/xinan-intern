@@ -12,6 +12,17 @@
 python bond_process.py input.json [输出.xlsx]
 ```
 
+本项目的代码、测试输入和示例结果已集中到 `projects/bond_purchase/`。
+从仓库根目录运行示例：
+
+```powershell
+python projects/bond_purchase/bond_process.py projects/bond_purchase/test_data/input_sample.json projects/bond_purchase/examples/sample_purchase.xlsx
+```
+
+完整项目背景见 [OVERVIEW.md](OVERVIEW.md)。
+
+`test_data/input_sample.json` 和 `examples/sample_purchase.xlsx` 为合成示例。原始真实输入和工作簿迁移到本地 `local_data/` 并排除提交。
+
 ## 输入格式（input.json）
 
 ```json

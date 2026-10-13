@@ -17,3 +17,16 @@ venv/
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# 未整理的本地工作数据
+/excel/
+
+# 新增真实交易输入和运行产物留在本地；仓库发布合成测试数据
+/projects/bond_profit/local_data/
+/projects/bond_profit/legacy/
+/projects/bond_profit/verification/
+/projects/bond_profit/*_FIFO*.xlsx
+/projects/bond_profit/*_FIFO*.json
+/projects/bond_profit/*_FIFO*.csv
+/projects/bond_profit/运行错误.json
+/projects/bond_purchase/local_data/
