@@ -1,0 +1,19 @@
+# WorkBuddy 项目数据（不推送）
+.workbuddy/
+
+# 内部工作文档（不推送）
+docs/
+
+# 其他内部数据（不推送）
+excel/信用债行业关联主承查询.xlsx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 系统文件
+.DS_Store
+Thumbs.db

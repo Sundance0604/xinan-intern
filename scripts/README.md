@@ -1,0 +1,72 @@
+# 债券买入记录处理脚本使用说明
+
+## 脚本职责
+
+`bond_process.py` 只对**已经处理好的字段**提供服务：接收结构化的 JSON 输入（含债券代码、数量、净价、主办人，以及 DM 接口拉取的市场数据），计算结算金额、资本利得、每日票息，生成持仓表格式的 Excel。
+
+**脚本本身不调用 DM 接口**——DM 数据由对话侧拉取后整理进 JSON。
+
+## 使用方式
+
+```bash
+python bond_process.py input.json [输出.xlsx]
+```
+
+## 输入格式（input.json）
+
+```json
+{
+  "settle_date": "2026-10-12",
+  "bonds": [
+    {
+      "code": "032690011.IB",           // 债券代码（必填）
+      "name": "26无锡城南PPN001",        // 简称
+      "quantity_wan": 2000,             // 买入数量（万）（必填）
+      "net_price": 100.4150,            // 买入净价（必填）
+      "host": "郑一凡",                  // 主办人（必填）
+      "coupon": 1.97,                   // 票面利率 %（DM: iss_coup_rate）
+      "remaining_tenor": "4.89Y",       // 剩余年限（DM: remaining_tenor）
+      "rating": "AA+",                  // 主体评级（DM: issuer_rating）
+      "guarantee": "非担保",             // 担保/非担保（DM: guarantor_name 是否为空）
+      "remaining_size_wan": 36000,      // 剩余规模万元（DM: new_size）
+      "inte_start_date": "2026-09-02",  // 起息日（兜底算应计利息用）
+      "inte_calcu_cls": "A/A",          // 计息基准（DM: inte_calcu_cls）
+      "valuation_net_price": 100.6481,  // 中债估值净价（DM: valuation_net_price）
+      "valuation_yield": 1.8299,        // 中债估值收益率 %（DM: valuation_yield）
+      "day_accrued_interest": 0.2159    // 日间应计利息 元/百元（DM: day_valuation_interest，推荐）
+    }
+  ]
+}
+```
+
+## 计算公式（已验证）
+
+| 字段 | 公式 |
+|---|---|
+| 面值 | 数量(万) × 10000 元 |
+| 结算金额 J | (买入净价 + 应计利息) × 面值 / 100 |
+| 资本利得 Q | (中债估值净价 − 买入净价) × 面值 / 100 |
+| 每日票息 R | 票面% × 面值 / 365 |
+
+## 关键注意事项
+
+1. **应计利息必须用 DM 的 `day_valuation_interest`**（日间应计利息，已含「上次付息日→结算日」的正确天数）。不要从起息日自己算——跨年付息的债券会算错（如 24大横琴MTN005 起息 2024 年，若从起息日算会多 7 元/百元）。
+
+2. **估值类型选择**：有回售权/永续的债券，估值净价和收益率要取 `valuation_type=行权` 那条（与表内 P 列口径一致）。
+
+3. **留空的列**：舆情(G)、买入收益率(E)、持仓工作日(L)、卖出结算日(M)、内评(O) 等，脚本统一留空。
+
+4. **持仓工作日**：脚本暂留空，正式需要 DM `get_trade_dates` 交易日历计算（结算日→今天的交易日数）。
+
+## 数据来源映射（DM 接口 → 字段）
+
+| 持仓表字段 | DM 接口 | DM 字段 |
+|---|---|---|
+| 票面 D | bond_basic_info | iss_coup_rate |
+| 评级 F | bond_basic_info | issuer_rating |
+| 担保 H | bond_basic_info | guarantor_name（空=非担保） |
+| 剩余年限 C | bond_basic_info | remaining_tenor |
+| 剩余规模 S | bond_basic_info | new_size（万元→亿） |
+| 中债估值 P | bond_valuation | valuation_yield（行权优先） |
+| 应计利息 | bond_valuation | day_valuation_interest |
+| 估值净价 | bond_valuation | valuation_net_price |
