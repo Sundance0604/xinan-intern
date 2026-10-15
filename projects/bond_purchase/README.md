@@ -43,10 +43,10 @@ python projects/bond_purchase/bond_process.py projects/bond_purchase/test_data/i
       "inte_start_date": "2026-09-02",  // 起息日（兜底算应计利息用）
       "inte_calcu_cls": "A/A",          // 计息基准（DM: inte_calcu_cls）
       "valuation_net_price": 100.6481,  // 中债估值净价（DM: valuation_net_price）
-      "valuation_yield": 1.8299,        // 中债估值收益率 %（DM: valuation_yield）
+      "valuation_yield": 1.8299,        // 中债估值收益率 %（百分比）
       "day_accrued_interest": 0.2159,   // 日间应计利息 元/百元（DM: day_valuation_interest，推荐）
       // ---- 买入收益率（可选，不填则由净价反解）----
-      "buy_yield": 1.5,                 // 用户直接给的买入收益率（小数 0.015 或百分数 1.5 均可）
+      "buy_yield": 1.5,                 // 用户直接给的买入收益率（百分比，如 1.5 = 1.5%）
       "next_pay_date": "2027-09-02",    // 下次付息日（反解 YTM 用）
       "matu_pay_date": "2030-09-02",    // 到期兑付日（反解 YTM 用）
       "option_date": "",                // 行权日（回售/永续债，反解"行权"口径）
@@ -55,6 +55,8 @@ python projects/bond_purchase/bond_process.py projects/bond_purchase/test_data/i
   ]
 }
 ```
+
+> **口径约定**：「率」类字段（票面 D、买入收益率 E、中债估值 P）统一用**百分比数值**，即 `4.2` 表示 4.2%（不再用 `0.042` 小数）。
 
 ## 计算公式（已验证）
 
@@ -68,7 +70,7 @@ python projects/bond_purchase/bond_process.py projects/bond_purchase/test_data/i
 
 ### 买入收益率的计算规则
 
-- **给了 `buy_yield`** → 直接用（支持小数 `0.015` 或百分数 `1.5`）。
+- **给了 `buy_yield`** → 直接用（百分比，如 `1.5`）。
 - **没给 `buy_yield`** → 用买入全价（净价 + 应计利息）反解到期收益率（YTM）：
   - 需要 `next_pay_date` + `matu_pay_date`（普通债）；回售/永续债再给 `option_date`，按「行权」口径反解。
   - 缺这些字段则留空。

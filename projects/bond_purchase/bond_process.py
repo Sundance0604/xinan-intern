@@ -27,9 +27,9 @@
           "inte_calcu_cls": "A/A",          # 计息基准
           # ---- 以下由 DM 接口提供（估值，T-1 或结算日）----
           "valuation_net_price": 100.6481,  # 中债估值净价
-          "valuation_yield": 1.8299,        # 中债估值收益率 %
+          "valuation_yield": 1.8299,        # 中债估值收益率 %（百分比）
           # ---- 买入收益率（可选，不填则由净价反解）----
-          "buy_yield": 1.5,                 # 用户直接给的买入收益率（小数或百分数）
+          "buy_yield": 1.5,                 # 用户直接给的买入收益率（百分比，如 1.5）
           "next_pay_date": "2027-09-02",    # 下次付息日（反解 YTM 用）
           "matu_pay_date": "2030-09-02",    # 到期兑付日（反解 YTM 用）
           "option_date": "",                # 行权日（回售/永续债，反解"行权"口径）
@@ -41,6 +41,10 @@
 输出：
     持仓表格式的 Excel（列序与「销售交易部持仓表.xlsx」一致 A~S 业务列）
     不用管的列（舆情、内评、卖出结算日等）留空。
+
+口径约定：
+    「率」类字段（票面 D、买入收益率 E、中债估值 P）统一用**百分比数值**，
+    即 4.2 表示 4.2%（不再用 0.042 小数）。
 
 公式（已验证）：
     面值 = 数量(万) * 10000 元
@@ -118,9 +122,9 @@ def _bond_dirty_price(yield_rate, coupon_pct, times, pay_freq=1):
 def calc_buy_yield(full_price, coupon_pct, settle_date, next_pay_date, matu_date,
                    pay_freq=1, option_date=None):
     """
-    由买入全价反解买入收益率（YTM，小数）。
+    由买入全价反解买入收益率（YTM）。
     二分法求解，区间 [-0.5, 0.5]（-50% ~ 50%），迭代 200 次，精度 <1e-8。
-    返回小数（如 0.025 = 2.5%）；无法求解时返回 None。
+    返回百分比数值（如 2.5 = 2.5%）；无法求解时返回 None。
     """
     times = _cashflow_times(settle_date, next_pay_date, matu_date, pay_freq, option_date)
     if not times:
@@ -137,13 +141,13 @@ def calc_buy_yield(full_price, coupon_pct, settle_date, next_pay_date, matu_date
         mid = (lo + hi) / 2.0
         f_mid = _bond_dirty_price(mid, coupon_pct, times, pay_freq) - full_price
         if f_mid == 0.0:
-            return mid
+            return mid * 100.0
         if f_lo * f_mid < 0:
             hi = mid
         else:
             lo = mid
             f_lo = f_mid
-    return (lo + hi) / 2.0
+    return (lo + hi) / 2.0 * 100.0
 
 
 def process_bond(b, settle_date):
@@ -198,17 +202,16 @@ def process_bond(b, settle_date):
     # 每日票息 R = 票面% * 面值 / 365
     daily_coupon = coupon / 100.0 * face_value / 365.0
 
-    # 买入收益率 E：
-    #   1) 用户直接给了 buy_yield -> 用它（支持小数 0.025 或百分数 2.5）
-    #   2) 没给 -> 用买入净价反解 YTM
-    buy_yield_decimal = None
+    # 买入收益率 E（统一百分比口径，如 2.4621 = 2.4621%）：
+    #   1) 用户直接给了 buy_yield -> 用它（百分比，如 1.5）
+    #   2) 没给 -> 用买入净价反解 YTM（返回百分比）
+    buy_yield_pct = None
     if buy_yield is not None and float(buy_yield) != 0:
-        v = float(buy_yield)
-        buy_yield_decimal = v if v < 1 else v / 100.0   # 百分数转小数
+        buy_yield_pct = float(buy_yield)   # 百分比，直接使用
     else:
         # 反解：需要 next_pay_date + matu_pay_date（或 option_date）
         if next_pay_date and (matu_pay_date or option_date):
-            buy_yield_decimal = calc_buy_yield(
+            buy_yield_pct = calc_buy_yield(
                 full_price, coupon, settle_date, next_pay_date,
                 matu_pay_date, pay_freq, option_date or None
             )
@@ -227,8 +230,8 @@ def process_bond(b, settle_date):
         "A": name,                          # 简称
         "B": code,                          # 代码
         "C": remaining_tenor,               # 剩余年限
-        "D": coupon / 100.0,                # 票面（小数，与表内一致）
-        "E": buy_yield_decimal,             # 买入收益率（小数；未给则用净价反解）
+        "D": coupon,                        # 票面（百分比，如 4.2 = 4.2%）
+        "E": buy_yield_pct,                 # 买入收益率（百分比；未给则用净价反解）
         "F": rating,                        # 主体/债项评级
         "G": "",                            # 舆情（留空）
         "H": guarantee,                     # 担保/非担保
@@ -239,7 +242,7 @@ def process_bond(b, settle_date):
         "M": "",                            # 卖出结算日（留空）
         "N": host,                          # 主办人
         "O": "",                            # 内评（留空）
-        "P": valuation_yield / 100.0,       # 当日中债估值（%）（小数，与表内一致）
+        "P": valuation_yield,               # 当日中债估值（%）（百分比，如 2.3188）
         "Q": round(capital_gain, 2),        # 资本利得
         "R": round(daily_coupon, 4),        # 每日票息
         "S": remaining_size_yi,             # 剩余规模（亿）
@@ -286,9 +289,9 @@ def build_workbook(rows, settle_date, out_path):
             val = row.get(col, "")
             cell = ws.cell(row=r_idx, column=c_idx, value=val if val != "" else None)
             cell.border = border
-            if col in ("D", "E", "P"):  # 百分比小数，格式化为小数
+            if col in ("D", "E", "P"):  # 率类字段，存百分比数值（4.2 = 4.2%）
                 if isinstance(val, float):
-                    cell.number_format = "0.000000"
+                    cell.number_format = "0.0000\"%\""
             elif col in ("J", "Q"):  # 金额
                 if isinstance(val, float):
                     cell.number_format = "#,##0.00"
