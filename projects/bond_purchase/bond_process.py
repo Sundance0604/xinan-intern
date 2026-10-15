@@ -180,12 +180,17 @@ def process_bond(b, settle_date):
     # 面值（元）
     face_value = qty_wan * 10000.0
 
-    # 应计利息（每百元）
-    if day_accrued_interest is not None:
-        # 优先用 DM 估值接口返回的日间应计利息（已含上次付息日到结算日的正确天数）
+    # 应计利息（每百元）—— 口径：含头计息（利息从上次付息日当天开始累积），
+    # 计息天数 = (结算日 - 上次付息日) + 1，与收益率计算器一致（如 09-23→10-15 = 23天）
+    last_pay_date = b.get("last_pay_date", "")       # 上次付息日（DM: year_pay_date 推算）
+    if last_pay_date:
+        days = (settle_date - parse_date(last_pay_date)).days + 1
+        accrued_100 = coupon * days / 365.0
+    elif day_accrued_interest is not None:
+        # 兜底：DM 估值接口的日间应计利息（注意：DM 口径不含头，且是 T-1 的，少算一天）
         accrued_100 = float(day_accrued_interest)
     elif inte_start_date:
-        # 兜底：从起息日粗算（仅适用于当年新发债，跨年付息会有误差）
+        # 再兜底：从起息日粗算（仅适用于当年新发债，跨年付息会有误差）
         accrued_100 = calc_accrued_interest(coupon, parse_date(inte_start_date), settle_date, inte_calcu_cls)
     else:
         accrued_100 = 0.0
