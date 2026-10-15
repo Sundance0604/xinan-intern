@@ -41,7 +41,8 @@ python projects/bond_purchase/bond_process.py projects/bond_purchase/test_data/i
       "guarantee": "非担保",             // 担保/非担保（DM: guarantor_name 是否为空）
       "remaining_size_wan": 36000,      // 剩余规模万元（DM: new_size）
       "inte_start_date": "2026-09-02",  // 起息日（兜底算应计利息用）
-      "inte_calcu_cls": "A/A",          // 计息基准（DM: inte_calcu_cls）
+      "inte_calcu_cls": "A/A",          // 计息基准（DM: inte_calcu_cls，决定应计利息含头/不含头）
+      "last_pay_date": "2026-09-02",    // 上次付息日（算应计利息用，DM: year_pay_date 推算）
       "valuation_net_price": 100.6481,  // 中债估值净价（DM: valuation_net_price）
       "valuation_yield": 1.8299,        // 中债估值收益率 %（百分比）
       "day_accrued_interest": 0.2159,   // 日间应计利息 元/百元（DM: day_valuation_interest，推荐）
@@ -80,8 +81,12 @@ python projects/bond_purchase/bond_process.py projects/bond_purchase/test_data/i
 
 ## 关键注意事项
 
-1. **应计利息优先用「上次付息日 + 含头计息」自算**：计息天数 = (结算日 − 上次付息日) + 1（利息从付息日当天累积，与收益率计算器一致）。输入 JSON 提供 `last_pay_date` 即可。
-   - ⚠️ DM 的 `day_valuation_interest` 是 T-1 且不含头口径，会少算一天，仅作兜底。
+1. **应计利息按计息基准区分「含头/不含头」**（关键，搞混差一天）：
+   - **A/365F（交易所 SH/SZ）**：天数 = (结算日 − 上次付息日) **+ 1**（含头）。如 09-23 付息 → 10-15 结算 = 23 天。
+   - **A/A（银行间 IB）**：天数 = (结算日 − 上次付息日)（不含头）。如 08-25 付息 → 10-15 结算 = 51 天。
+   - 输入 JSON 提供 `last_pay_date` + `inte_calcu_cls` 即可，脚本自动判断。
+   - ⚠️ 真实案例：银行间债统一用含头会多算一天，结算金额差 643~1561 元。
+   - ⚠️ DM 的 `day_valuation_interest` 是 T-1 口径，仅作兜底。
    - ⚠️ 不要从起息日自己算——跨年付息的债券会算错（如 24大横琴MTN005 起息 2024 年，若从起息日算会多 7 元/百元）。
 
 2. **估值类型选择**：有回售权/永续的债券，估值净价和收益率要取 `valuation_type=行权` 那条（与表内 P 列口径一致）。

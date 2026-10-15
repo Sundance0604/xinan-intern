@@ -180,14 +180,21 @@ def process_bond(b, settle_date):
     # 面值（元）
     face_value = qty_wan * 10000.0
 
-    # 应计利息（每百元）—— 口径：含头计息（利息从上次付息日当天开始累积），
-    # 计息天数 = (结算日 - 上次付息日) + 1，与收益率计算器一致（如 09-23→10-15 = 23天）
+    # 应计利息（每百元）—— 口径：按计息基准区分含头/不含头
+    #   A/365F（交易所 SH/SZ）：天数 = (结算日 - 上次付息日) + 1（含头）
+    #       例：09-23付息 → 10-15结算 = 23天
+    #   A/A（银行间 IB）：天数 = (结算日 - 上次付息日)（不含头）
+    #       例：08-25付息 → 10-15结算 = 51天
+    #   两者差一天，根因是计息基准的起算约定不同（已用同事真实数据验证）
     last_pay_date = b.get("last_pay_date", "")       # 上次付息日（DM: year_pay_date 推算）
     if last_pay_date:
-        days = (settle_date - parse_date(last_pay_date)).days + 1
+        days = (settle_date - parse_date(last_pay_date)).days
+        if inte_calcu_cls and inte_calcu_cls.startswith("A/365"):
+            days += 1   # 交易所 A/365F 含头
+        # 银行间 A/A 不含头，days 不变
         accrued_100 = coupon * days / 365.0
     elif day_accrued_interest is not None:
-        # 兜底：DM 估值接口的日间应计利息（注意：DM 口径不含头，且是 T-1 的，少算一天）
+        # 兜底：DM 估值接口的日间应计利息
         accrued_100 = float(day_accrued_interest)
     elif inte_start_date:
         # 再兜底：从起息日粗算（仅适用于当年新发债，跨年付息会有误差）
