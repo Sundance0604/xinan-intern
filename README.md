@@ -2,6 +2,8 @@
 
 仓库包含两个独立项目，代码、测试数据和说明分别存放。
 
+> 👉 **使用 Agent 的同事请看**：[《使用 Agent 的协作规范：默认日期、数据处理原则与方法》](AGENT_GUIDE.md) —— 统一日期约定、字段口径和标准流程，避免算错。
+
 | 项目 | 入口 | 用途 |
 |---|---|---|
 | [债券买入记录处理](projects/bond_purchase/README.md) | `projects/bond_purchase/bond_process.py` | 读取结构化 JSON，生成持仓表买入记录 |
