@@ -211,9 +211,6 @@ def process_bond(b, settle_date):
     # 资本利得 Q = (估值净价 - 买入净价) * 面值 / 100
     capital_gain = (valuation_net_price - net_price) * face_value / 100.0
 
-    # 每日票息 R = 票面% * 面值 / 365
-    daily_coupon = coupon / 100.0 * face_value / 365.0
-
     # 买入收益率 E（统一百分比口径，如 2.4621 = 2.4621%）：
     #   1) 用户直接给了 buy_yield -> 用它（百分比，如 1.5）
     #   2) 没给 -> 用买入净价反解 YTM（返回百分比）
@@ -227,6 +224,13 @@ def process_bond(b, settle_date):
                 full_price, coupon, settle_date, next_pay_date,
                 matu_pay_date, pay_freq, option_date or None
             )
+
+    # 每日票息 R = 买入收益率(小数) × 数量(万) × 10000 / 365
+    # 注意：原文件公式是 E*I/365*10000（E=买入收益率，I=买入数量万），
+    # 用的是「买入收益率」，不是「票面利率」。两者含义不同。
+    daily_coupon = None
+    if buy_yield_pct is not None:
+        daily_coupon = buy_yield_pct / 100.0 * face_value / 365.0
 
     # 剩余规模（亿） = 万元 / 10000
     remaining_size_yi = None
