@@ -44,7 +44,13 @@ python projects/bond_purchase/bond_process.py projects/bond_purchase/test_data/i
       "inte_calcu_cls": "A/A",          // 计息基准（DM: inte_calcu_cls）
       "valuation_net_price": 100.6481,  // 中债估值净价（DM: valuation_net_price）
       "valuation_yield": 1.8299,        // 中债估值收益率 %（DM: valuation_yield）
-      "day_accrued_interest": 0.2159    // 日间应计利息 元/百元（DM: day_valuation_interest，推荐）
+      "day_accrued_interest": 0.2159,   // 日间应计利息 元/百元（DM: day_valuation_interest，推荐）
+      // ---- 买入收益率（可选，不填则由净价反解）----
+      "buy_yield": 1.5,                 // 用户直接给的买入收益率（小数 0.015 或百分数 1.5 均可）
+      "next_pay_date": "2027-09-02",    // 下次付息日（反解 YTM 用）
+      "matu_pay_date": "2030-09-02",    // 到期兑付日（反解 YTM 用）
+      "option_date": "",                // 行权日（回售/永续债，反解"行权"口径）
+      "pay_freq": 1                     // 每年付息次数（1=按年，2=半年）
     }
   ]
 }
@@ -58,6 +64,17 @@ python projects/bond_purchase/bond_process.py projects/bond_purchase/test_data/i
 | 结算金额 J | (买入净价 + 应计利息) × 面值 / 100 |
 | 资本利得 Q | (中债估值净价 − 买入净价) × 面值 / 100 |
 | 每日票息 R | 票面% × 面值 / 365 |
+| 买入收益率 E | 用户给的 `buy_yield`，或由买入净价反解 YTM（二分法） |
+
+### 买入收益率的计算规则
+
+- **给了 `buy_yield`** → 直接用（支持小数 `0.015` 或百分数 `1.5`）。
+- **没给 `buy_yield`** → 用买入全价（净价 + 应计利息）反解到期收益率（YTM）：
+  - 需要 `next_pay_date` + `matu_pay_date`（普通债）；回售/永续债再给 `option_date`，按「行权」口径反解。
+  - 缺这些字段则留空。
+  - 反解方法：二分法迭代（区间 -50%~50%，精度 <1e-8），票息频率按 `pay_freq` 折算。
+
+> 口径与「估值取行权」一致：有回售/永续的债券，买入收益率也应取「行权」口径。
 
 ## 关键注意事项
 
