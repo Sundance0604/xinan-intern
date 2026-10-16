@@ -60,12 +60,20 @@
 import json
 import sys
 from datetime import datetime, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 
 def parse_date(s):
     return datetime.strptime(str(s).strip(), "%Y-%m-%d")
+
+
+def round_half_up(value, ndigits):
+    """四舍五入（非银行家舍入），避免浮点边界导致的尾数偏差。"""
+    if value is None:
+        return None
+    return float(Decimal(str(value)).quantize(Decimal('1.' + '0' * ndigits), rounding=ROUND_HALF_UP))
 
 
 def calc_accrued_interest(coupon_pct, inte_start, settle_date, inte_calcu_cls="A/365F"):
@@ -238,9 +246,14 @@ def process_bond(b, settle_date):
                 matu_pay_date, pay_freq, option_date or None
             )
 
-    # 每日票息 R = 买入收益率(小数) × 数量(万) × 10000 / 365
+    # 买入收益率 E 统一保留 4 位小数（百分比），避免满精度导致每日票息尾数不干净
+    if buy_yield_pct is not None:
+        buy_yield_pct = round_half_up(float(buy_yield_pct), 4)
+
+    # 每日票息 R = 买入收益率(小数，4位) × 数量(万) × 10000 / 365
     # 注意：原文件公式是 E*I/365*10000（E=买入收益率，I=买入数量万），
     # 用的是「买入收益率」，不是「票面利率」。两者含义不同。
+    # 用四舍五入后的 E（4位）计算，保证 E 列与 R 列自洽。
     daily_coupon = None
     if buy_yield_pct is not None:
         daily_coupon = buy_yield_pct / 100.0 * face_value / 365.0
