@@ -30,3 +30,6 @@ Thumbs.db
 /projects/bond_profit/*_FIFO*.csv
 /projects/bond_profit/运行错误.json
 /projects/bond_purchase/local_data/
+
+# 运行产物（真实持仓表 Excel，本地不推送）
+/outputs/

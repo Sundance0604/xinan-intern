@@ -107,9 +107,20 @@ def _cashflow_times(settle_date, next_pay_date, matu_date, pay_freq=1, option_da
 def _bond_dirty_price(yield_rate, coupon_pct, times, pay_freq=1):
     """
     给定年化收益率 yield_rate（小数），计算全价（元/百元）。
-    标准约定：yield_rate 为年化，每期折现因子 = (1 + yield_rate/pay_freq)^期数。
-    其中"期数" = t * pay_freq（t 为年化时间）。
+    口径（与交易系统一致，已用 23锦生01 行权 1.317% 锚定验证）：
+      - 最后一笔现金流期限 <= 1 年：单利 full = CF / (1 + y*t)
+      - 最后一笔现金流期限 > 1 年：复利 full = CF / (1 + y/pay_freq)^(t*pay_freq)
+    （国内债券定价标准约定：剩余期限<=1年单利，>1年复利）
     """
+    last_t = times[-1]
+    if last_t <= 1.0:
+        # 单利：每笔现金流按 (1 + y*t) 折现
+        price = 0.0
+        for t in times:
+            price += coupon_pct / (1 + yield_rate * t)
+        price += 100.0 / (1 + yield_rate * last_t)
+        return price
+    # 复利
     coupon_per_period = coupon_pct / pay_freq
     period_rate = yield_rate / pay_freq
     price = 0.0
@@ -155,7 +166,8 @@ def process_bond(b, settle_date):
     code = b["code"]
     name = b.get("name", "")
     qty_wan = float(b["quantity_wan"])           # 万
-    net_price = float(b["net_price"])            # 买入净价（元/百元面值）
+    _net = b.get("net_price")
+    net_price = float(_net) if (_net is not None and _net != "") else None   # 买入净价（元/百元面值），缺失则 None
     host = b.get("host", "")
 
     coupon = float(b.get("coupon", 0))           # 票面 %
@@ -202,14 +214,15 @@ def process_bond(b, settle_date):
     else:
         accrued_100 = 0.0
 
-    # 全价 = 净价 + 应计利息
-    full_price = net_price + accrued_100
-
-    # 结算金额 J = 全价 * 面值 / 100
-    settle_amount = full_price * face_value / 100.0
-
-    # 资本利得 Q = (估值净价 - 买入净价) * 面值 / 100
-    capital_gain = (valuation_net_price - net_price) * face_value / 100.0
+    # 全价 = 净价 + 应计利息（净价缺失时，全价/结算金额/资本利得/收益率一并留空）
+    if net_price is not None:
+        full_price = net_price + accrued_100
+        settle_amount = full_price * face_value / 100.0
+        capital_gain = (valuation_net_price - net_price) * face_value / 100.0
+    else:
+        full_price = None
+        settle_amount = None
+        capital_gain = None
 
     # 买入收益率 E（统一百分比口径，如 2.4621 = 2.4621%）：
     #   1) 用户直接给了 buy_yield -> 用它（百分比，如 1.5）
@@ -217,7 +230,7 @@ def process_bond(b, settle_date):
     buy_yield_pct = None
     if buy_yield is not None and float(buy_yield) != 0:
         buy_yield_pct = float(buy_yield)   # 百分比，直接使用
-    else:
+    elif net_price is not None:
         # 反解：需要 next_pay_date + matu_pay_date（或 option_date）
         if next_pay_date and (matu_pay_date or option_date):
             buy_yield_pct = calc_buy_yield(
@@ -252,15 +265,15 @@ def process_bond(b, settle_date):
         "G": "",                            # 舆情（留空）
         "H": guarantee,                     # 担保/非担保
         "I": qty_wan,                       # 买入数量（万）
-        "J": round(settle_amount, 2),       # 结算金额（元）
+        "J": round(settle_amount, 2) if settle_amount is not None else "",       # 结算金额（元）
         "K": settle_date,                   # 买入结算日
         "L": holding_days,                  # 持仓工作日（留空，待交易日历）
         "M": "",                            # 卖出结算日（留空）
         "N": host,                          # 主办人
         "O": "",                            # 内评（留空）
         "P": valuation_yield,               # 当日中债估值（%）（百分比，如 2.3188）
-        "Q": round(capital_gain, 2),        # 资本利得
-        "R": round(daily_coupon, 4),        # 每日票息
+        "Q": round(capital_gain, 2) if capital_gain is not None else "",        # 资本利得
+        "R": round(daily_coupon, 4) if daily_coupon is not None else "",        # 每日票息
         "S": remaining_size_yi,             # 剩余规模（亿）
     }
     return row
