@@ -185,8 +185,10 @@ def process_bond(b, settle_date):
     remaining_size_wan = b.get("remaining_size_wan")   # 万元
     inte_start_date = b.get("inte_start_date", "")
     inte_calcu_cls = b.get("inte_calcu_cls", "A/365F")
-    valuation_net_price = float(b.get("valuation_net_price", 0))
-    valuation_yield = float(b.get("valuation_yield", 0))
+    _vnp = b.get("valuation_net_price")
+    valuation_net_price = float(_vnp) if (_vnp is not None and _vnp != "") else None
+    _vy = b.get("valuation_yield")
+    valuation_yield = float(_vy) if (_vy is not None and _vy != "") else None
     # DM 提供的日间应计利息（每百元面值），优先使用（更准确）
     day_accrued_interest = b.get("day_accrued_interest")
 
@@ -226,7 +228,8 @@ def process_bond(b, settle_date):
     if net_price is not None:
         full_price = net_price + accrued_100
         settle_amount = full_price * face_value / 100.0
-        capital_gain = (valuation_net_price - net_price) * face_value / 100.0
+        # 资本利得：估值净价缺失（如一级缴款未上市）时留空
+        capital_gain = (valuation_net_price - net_price) * face_value / 100.0 if valuation_net_price is not None else None
     else:
         full_price = None
         settle_amount = None
