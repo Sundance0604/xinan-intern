@@ -1,0 +1,58 @@
+﻿信用债离线数据说明
+
+快照日期：2026-09-15
+来源文件：信用债存量概览20260915.xlsx
+记录数：38,819
+日期口径：前四张表存量快照；中票和定向 J 列 Wind 公式指定 2026-09-15。其他静态表未独立标注估值日期，沿用文件快照日期。评级可能为最新值（中票 H 列引用 TODAY），非严格历史评级回溯。
+
+【SQLite】
+bonds：逐条保存网页23个字段，额外record_id为按原始顺序生成的主键。
+债券明细：中文列名视图，方便数据库工具直接查看。
+有效估值样本：城市非空、期限与收益率大于0的37,645条记录；尚未应用城市/评级/特殊条款等网页筛选。
+dataset_metadata：快照元数据，value列为JSON。
+field_dictionary：字段名称、中文释义、存储类型与单位。
+sheet_summary：前四张表的记录数。
+
+查询示例：
+SELECT * FROM "债券明细" WHERE "城市"='南京市';
+SELECT "债券代码","债券简称","中债估值收益率" FROM "有效估值样本" WHERE "城市"='南京市';
+
+【JSON】
+顶层包含meta与rows；每一行的字段顺序以meta.fields为准，与SQLite完全对应。
+数值缺失保留为null；文本缺失保留为空字符串。不会将缺失值当成有效的零收益率。
+不同市场代码保留，记录不按简称去重。原始工作表及Excel行号保留于sheet、row字段。
+收益率单位为百分数，1.73表示1.73%，并非0.0173。YY评级保持原始带±档位。
+
+【字段】
+01. code | 债券代码 | TEXT | 保留交易市场后缀；不按债券简称去重
+02. name | 债券简称 | TEXT |
+03. issuer | 发行人 | TEXT |
+04. term | 剩余期限 | REAL | 单位：年；沿用原表 E 列
+05. yield | 中债估值收益率 | REAL | 单位：百分数；例如 1.73 表示 1.73%
+06. rating | 主体评级 | TEXT | 原表主评机构主体评级
+07. implied | 中债隐含评级 | TEXT |
+08. yy | YY评级 | TEXT | 保留 4+ / 4 / 4- 等原始档位
+09. method | 发行方式 | TEXT | 公募 / 私募
+10. province | 省份 | TEXT |
+11. city | 城市 | TEXT | 沿用原表城市
+12. type | 债券品种 | TEXT | 原表 Wind债券分类(2025)
+13. sheet | 来源工作表 | TEXT |
+14. row | 来源Excel行号 | INTEGER | 包含标题行；按 Excel 一基行号
+15. amount | 最新总额 | REAL | 单位：亿元
+16. couponText | 票息原文 | TEXT | 含区间或特殊条款时不强制转成数字
+17. start | 起息日期 | TEXT | YYYY-MM-DD
+18. maturity | 到期日期 | TEXT | YYYY-MM-DD
+19. frequency | 付息频率原文 | TEXT |
+20. windLGFV | 是否城投债Wind | TEXT |
+21. yyLGFV | 是否城投债YY | TEXT |
+22. fullName | 债券全称 | TEXT |
+23. face | 面额 | REAL | 单位：元
+
+【永久更新离线网页（开发用途）】
+网页为单文件版本。第一个script内的window.CREDIT_DATA是完整JSON快照。
+若用另一份相同结构的数据永久替换，应同步修改meta.date、meta.sheets及各项数据，
+将JSON序列化并将所有“</”转义为“<\/”，再替换window.CREDIT_DATA对应内容。
+修改后应重新核验记录数、字段顺序、SQLite副本、筛选结果及报价比较。
+只修改旁边的SQLite或JSON文件不会改变HTML中的数据。
+
+普通使用者请优先使用网页的“导入Excel”功能，无需执行数据库操作。

@@ -1,0 +1,7 @@
+﻿组件：SheetJS Community Edition 0.20.3
+用途：在浏览器本地解析用户选择的Excel文件。
+许可：Apache License 2.0，完整文本见 SheetJS-LICENSE.txt。
+官方来源：https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js
+许可来源：https://cdn.sheetjs.com/xlsx-0.20.3/package/LICENSE
+组件已内置在网页中，运行时无需连接上述网址。
+此许可仅适用于第三方组件；用户提供的债券数据及相关产品权利不因打包而改变。

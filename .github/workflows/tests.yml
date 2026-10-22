@@ -1,4 +1,4 @@
-name: Python tests
+name: Project tests
 on: [push, pull_request]
 jobs:
   fifo:
@@ -10,3 +10,19 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -r projects/bond_profit/requirements.txt
       - run: python -m unittest discover -s projects/bond_profit/tests -v
+  credit_curve:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: projects/城市信用债曲线_完整离线包
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test
+      - if: runner.os == 'Windows'
+        run: .\启动批量查询.cmd --check

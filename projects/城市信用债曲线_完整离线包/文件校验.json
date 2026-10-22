@@ -1,0 +1,31 @@
+{
+  "package": "城市信用债曲线_完整离线包",
+  "packaged_date": "2026-10-22",
+  "snapshot_date": "2026-09-15",
+  "record_count": 38819,
+  "source_html": "data/城市信用债曲线_完整离线包/双击打开.html（原件未改动）",
+  "local_config": "DeepSeek配置.md 与 runtime/ 为本机可变内容，不纳入静态校验。",
+  "sha256": {
+    ".gitignore": "0ee589dbbbb920ae202617948036bd5bffe03f85d4104f55bbda73befa5d9a4d",
+    "第三方许可/第三方组件说明.txt": "95c82a65a67e774d4dd2c46d9883a3a21a68e84a640b0eb5e7ddc9d323ce9cc5",
+    "第三方许可/SheetJS-LICENSE.txt": "4d2a38ac35cda06a555c84074a819d413339cd3691b822cae50f8f322fe01f64",
+    "批量查询解析规则.md": "534d16d996b7941667e343754504f63d3417bfceb3239abd6e0e2b3edeb7c3bf",
+    "启动批量查询.cmd": "72f210b3bbaf3bffb1fcbf5d20add1c23b1c8e2865cb5fe22f5666829a073272",
+    "数据库/数据字典与更新说明.txt": "82bb539fd9d79a19f9703f4ab2f3b88bc8eab38072006d4bef60b0c7f1875810",
+    "数据库/信用债数据.json": "2d5daa9bb40229d5098017d641b92b3a07843455421f689b5958539315a26a15",
+    "数据库/信用债数据库.sqlite": "10a14a730f807f9e816df9118824cf0a5e839eb3bd5fc798fa94b05c68d18dc1",
+    "双击打开.html": "f5d01be34f305a4f5816ada7a8e29ad4522858b9039d72051901eeac563c1ec9",
+    "assets/快照数据.js": "7addce375bf38f044f8c5e0d818100cf6d0e6fa583df372923ae259f0ae99af9",
+    "assets/批量查询.js": "b8221cab169c280f6edcd3b4af97e1c47a97a9181306291dd26aba2e13eb46fe",
+    "assets/数据更新.js": "6f07f1156c70820a2f7b19d636f27c4c258bd2c183fe5ee7ffc167ee3701cf83",
+    "batch-server.cjs": "df66047a99f311bf072049bd49619edbcc8d13c24654bb5d0ba5a43e0315d427",
+    "README.md": "5b4dd327704ed4ee26292bb1eed90ef17ad19f3034d782e521ccbc8a1941aafb",
+    "server/快照存储.cjs": "fe0d6fc882f0aa718b86844bf53d416a64f9574f26b2405aba30f3bec1852791",
+    "server/批量查询服务.cjs": "59b0d0b7bc820fad13a18118609e0a7bc682dea0875c96897e90b5dd678c7ee1",
+    "tests/批量查询.test.cjs": "b65726b0702ab57c5b9108174165bcad26c6c09a13ceb07b7fcb7dca68a2a6f0",
+    "tests/数据更新.test.cjs": "d1ef70d953a935ebc73db90064072e9a72824181fc18599a8ad98a716377ac2c",
+    "tests/fixtures.cjs": "2049374ae78bd4d19efc07d74884dd70a7f2c713686eca25b0a136497459f9a4",
+    "DeepSeek配置.example.md": "5d70031de9821e5550ff35ce46857fa84d9b499dce526c07c81beac725356b16",
+    ".gitattributes": "8d062459d67d92ad76ae86e1ee074dca506f9b0e51157851e631b362f27f6476"
+  }
+}
