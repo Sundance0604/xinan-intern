@@ -1,0 +1,8 @@
+{
+  "url": "https://docs.qq.com/sheet/YOUR_DOCUMENT_ID",
+  "chrome": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "sheets": [
+    {"id": "HOLDINGS_SHEET_ID", "name": "【持仓表】"},
+    {"id": "FUNDING_SHEET_ID", "name": "【资金占用积数统计表】"}
+  ]
+}

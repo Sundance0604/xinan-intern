@@ -33,3 +33,23 @@ Thumbs.db
 
 # 运行产物（真实持仓表 Excel，本地不推送）
 /outputs/
+
+# Local inputs, browser profiles, reports and archives (never publish)
+node_modules/
+*.inspect.ndjson
+browser_profile_*/
+*.7z
+*.zip
+/data/
+/projects/bond_profit/1019/
+/projects/bond_profit/1020/
+/projects/bond_profit/交易记录/
+/projects/bond_profit/outputs/
+/projects/bond_purchase/outputs/
+/projects/西南证券工作内容/scripts/data/
+/projects/西南证券工作内容/local_data/
+/projects/西南证券工作内容/outputs/
+/projects/西南证券工作内容/config.local.json
+# Original internal operating manuals contain live document links/contact details
+/projects/西南证券工作内容/SKILL.md
+/projects/西南证券工作内容/功能清单.md

@@ -1,0 +1,20 @@
+{
+  "settle_date": "2026-09-24",
+  "bonds": [
+    {
+      "code": "000001.IB",
+      "name": "示例债券甲",
+      "quantity_wan": 100,
+      "net_price": 100,
+      "host": "示例交易员",
+      "coupon": 2,
+      "remaining_tenor": "5.00Y",
+      "rating": "AAA",
+      "guarantee": "非担保",
+      "remaining_size_wan": 10000,
+      "valuation_net_price": 100.1,
+      "valuation_yield": 2,
+      "day_accrued_interest": 0
+    }
+  ]
+}
