@@ -55,7 +55,7 @@ def latest_holdings(before=None):
     return legacy if os.path.exists(legacy) else None
 
 
-TRADE_COLS = ("交易品种", "交易方向", "交易日期", "代码", "名称", "交易面额(万)", "结算金额(元)",
+TRADE_COLS = ("交易状态", "交易品种", "交易方向", "交易日期", "代码", "名称", "交易面额(万)", "结算金额(元)",
               "托管市场", "交易编号", "交易时间", "录入员", "到期结算方式")
 SUFFIX = {"上交所": ".SH", "深交所": ".SZ", "银行间": ".IB", "中债登": ".IB", "清算所": ".IB", "北交所": ".BJ"}
 
@@ -135,6 +135,7 @@ def load_trades(path):
         settle = str(g(r, "到期结算方式")).strip()
         out.append({
             "交易编号": str(g(r, "交易编号")).strip(),
+            "交易状态": str(g(r, "交易状态")).strip(),
             "品种": prod, "方向": str(g(r, "交易方向")).strip(), "日期": str(g(r, "交易日期")).strip(),
             "交易时间": str(g(r, "交易时间")).strip(),
             "代码": code, "名称": str(g(r, "名称")).strip(),
@@ -368,6 +369,9 @@ def fifo_buy_amount(cands, sell_qty_wan):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("trade")
+    ap.add_argument("--trade-statuses", nargs='+', default=['成交确认'],
+                    help="当日纳入的交易状态，默认仅成交确认；其他状态必须先经业务确认")
+    ap.add_argument("--coupons", default=None, help="人工确认的当日付息JSON：date、source、payments（代码→元）")
     ap.add_argument("--prev", default=None)
     ap.add_argument("--hold", default=None)
     ap.add_argument("--prev-profit", default=None, help="上一交易日盈利表，读取其最新数据页")
@@ -438,7 +442,10 @@ def main():
                 daijiao_choices = {str(k).split(".")[0].strip(): bool(v) for k, v in raw.items()}
         except Exception as e:
             sys.exit(f"读取代缴选择文件失败: {e}")
-    trades = load_trades(args.trade)
+    all_trades = load_trades(args.trade)
+    trades = [t for t in all_trades if t['交易状态'] in args.trade_statuses]
+    if not trades:
+        sys.exit('指定状态范围内没有交易，请核对交易状态列与--trade-statuses')
     sells = [t for t in trades if "卖出" in t["方向"]]
     buys = [t for t in trades if "买入" in t["方向"] and "卖出" not in t["方向"]]
 
@@ -567,6 +574,10 @@ def main():
                       "结算金额差": diff, "代投代缴": is_daijiao,
                       "未匹配完": short, "需人工确认": False})
 
+    coupon_audit = []
+    if args.coupons:
+        from coupon_adjustments import apply_coupons
+        coupon_audit = apply_coupons(diffs, args.coupons, today)
     total_diff = sum(d["结算金额差"] for d in diffs if d["结算金额差"] is not None)
     zong = total_diff + args.chai                          # 总结算金额差
     daijiao = sum(d["结算金额差"] for d in diffs
@@ -586,6 +597,9 @@ def main():
         avg_zc = raw / 1e8 if raw is not None else None      # 亿元
 
     result = {
+        "纳入交易状态": args.trade_statuses,
+        "排除的交易编号": [t['交易编号'] for t in all_trades if t['交易状态'] not in args.trade_statuses],
+        "人工付息核对": coupon_audit,
         "历史重放核对": replay_audits,
         "日期": today.strftime("%Y-%m-%d"),
         "交易量（亿元）": round(trade_vol_yi, 10),
@@ -668,171 +682,8 @@ def print_daijiao_pending(items):
 
 
 def gen_xlsx(result, args, today, skip_class=False):
-    from openpyxl import Workbook, load_workbook
-    from report_format import format_report, NUMBER, PERCENT
-    os.makedirs(args.outdir, exist_ok=True)
-    d = today.strftime("%m%d")
-    # ---- 1) 结算表 盈亏情况（版式与样例一致）----
-    wb = Workbook(); ws = wb.active; ws.title = "Sheet2"
-    ws.append(["结算日期", "债券名称", "债券代码", "结算金额差（元）", "总结算金额差（元）"])
-    r = 2
-    for x in result["逐笔结算金额差"]:
-        ws.cell(row=r, column=1, value=today)
-        ws.cell(row=r, column=2, value=x["名称"])
-        ws.cell(row=r, column=3, value=x["代码带后缀"])
-        if x["结算金额差"] is not None:
-            ws.cell(row=r, column=4, value=round(x["结算金额差"], 2))
-        else:
-            ws.cell(row=r, column=6, value="需人工确认（多笔买入）")
-        r += 1
-    last_detail = r - 1
-    chai_row = last_detail + 2          # 拆借成本写在卖出记录后两行（不固定行）
-    # 总结算金额差 = Σ逐笔结算金额差 + 拆借成本（范围随当日卖出笔数变化，保留为公式）
-    ws.cell(row=2, column=5, value=f"=SUM(D2:D{last_detail})+D{chai_row}")
-    ws.cell(row=5, column=5, value="交易量（亿元）")
-    ws.cell(row=6, column=5, value=result["交易量（亿元）"])
-    ws.cell(row=9, column=5, value="票息收入（万元）")
-    ws.cell(row=10, column=5, value=result["票息收入（万元）"])
-    ws.cell(row=chai_row, column=3, value="拆借成本")
-    ws.cell(row=chai_row, column=4, value=result["拆借成本（元）"])
-
-    out1 = os.path.join(args.outdir, f"{d}盈亏情况.xlsx")
-    format_report(ws, 1)
-    ws['E2'].number_format = NUMBER
-    for row in range(2, last_detail + 1):
-        ws.cell(row, 1).number_format = 'yyyy-mm-dd'
-        ws.cell(row, 3).number_format = '@'
-    for col, width in {'A': 18, 'B': 35, 'C': 22, 'D': 24, 'E': 30}.items():
-        ws.column_dimensions[col].width = width
-    try:
-        wb.save(out1)
-    except PermissionError:
-        print(f"[跳过] {out1} 正被 Excel/WPS 占用，请关闭后重跑")
-
-    prev_cls = None
-    if not skip_class:
-        # ---- 2) 分类表 每日结算分类（本周 sheet 的当天列填 代缴/撮合）----
-        prev_cls = getattr(args, 'prev_classification', None) or find_prev("*每日结算分类.xlsx", today)
-        wd_label = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][today.weekday()]
-        if prev_cls:
-            wb2 = load_workbook(prev_cls, data_only=True)
-            mon = today - datetime.timedelta(days=today.weekday())
-            fri = mon + datetime.timedelta(days=4)
-            def key(dt, pad):
-                return f"{dt.month:02d}.{dt.day:02d}" if pad else f"{dt.month}.{dt.day}"
-            targets = {f"{key(mon, p)}-{key(fri, p)}".replace(" ", "") for p in (True, False)}
-            ws2 = None
-            for sh in wb2.worksheets:
-                title = str(sh["A1"].value or "").replace(" ", "")
-                if any(t in title for t in targets):
-                    ws2 = sh; break
-            if ws2 is None:                       # 新的一周：新建 sheet
-                ws2 = wb2.create_sheet(title=f"{key(mon, True)}-{key(fri, True)} 每日结算分类"[:31])
-                ws2["A1"] = f"{key(mon, True)}-{key(fri, True)}   每日结算分类"
-                ws2["A2"] = "项目"
-                for i, lab in enumerate(["周一", "周二", "周三", "周四", "周五"], start=2):
-                    ws2.cell(row=2, column=i, value=lab)
-                ws2["A3"] = "代缴"; ws2["A4"] = "撮合"
-            col = None
-            for c in ws2[2]:
-                if str(c.value).strip() == wd_label:
-                    col = c.column; break
-            if col:
-                # 分类表直接写计算结果，不保留公式
-                ws2.cell(row=3, column=col, value=result["代缴（万元）"])
-                ws2.cell(row=4, column=col, value=result["撮合（万元）"])
-            out2 = os.path.join(args.outdir, f"{d}每日结算分类.xlsx")
-            for sheet in wb2:
-                for row in sheet:
-                    for cell in row:
-                        if isinstance(cell.value, (int, float)):
-                            cell.number_format = NUMBER
-            try:
-                wb2.save(out2)
-            except PermissionError:
-                print(f"[跳过] {out2} 正被 Excel/WPS 占用，请关闭后重跑")
-
-    # ---- 3) 盈利表 当日盈利情况（读上一版滚动，标签与样例一致）----
-    prev_pnl = getattr(args, 'prev_profit', None) or find_prev("*销售交易部当日盈利情况.xlsx", today)
-    prev_vals, prev_date = {}, None
-    year_start = datetime.date(today.year, 1, 1)
-    if prev_pnl:
-        wbp = load_workbook(prev_pnl, data_only=True)
-        if "最新数据" in wbp.sheetnames:
-            sp = wbp["最新数据"]
-            prev_date = parse_date(sp.cell(row=1, column=1).value)
-            if prev_date is None or prev_date >= today:
-                raise ValueError('上一交易日盈利表的最新数据日期必须早于本次计算日')
-            for row in sp.iter_rows(min_row=3, max_row=13):
-                k = row[0].value
-                if isinstance(k, str) and row[1].value is not None:
-                    prev_vals[k.strip()] = num(row[1].value)
-            year_start = parse_date(sp.cell(row=1, column=9).value) or year_start
-
-    # 税费需从估值系统手工查（--tax-month / --tax-year），未给则沿用前一日数值
-    tax_month = args.tax_month if args.tax_month is not None else prev_vals.get("本月截至目前应缴税费（万元）")
-    tax_year = args.tax_year if args.tax_year is not None else prev_vals.get("本年累计税费（万元）")
-
-    wb3 = Workbook(); wb3.remove(wb3.active)
-    s_prev = wb3.create_sheet("前一日数据"); s_new = wb3.create_sheet("最新数据")
-    labels = ["当日收益（万元）", "本年总收益（万元）", "本月截至目前应缴税费（万元）",
-              "本年累计税费（万元）", "当日交易量（亿元）", "本年累计交易量（亿元）",
-              "本年度日均占资（亿元）", "时点占资（亿元）", "当日日终持仓（亿元）",
-              "绝对收益率", "年化收益率"]
-    # 版式同样例：第1行日期、第2行标题、第3行起为指标
-    s_prev["A1"] = prev_date; s_prev["A2"] = "销售交易部盈利表"; s_prev["I1"] = year_start
-    s_new["A1"] = today; s_new["A2"] = "销售交易部盈利表"; s_new["I1"] = year_start
-    # 盈利表只保留这 4 个计算公式，其余直接填数值
-    value_cells = {
-        "当日收益（万元）": result["当日收益（万元）"],
-        "本月截至目前应缴税费（万元）": tax_month,
-        "本年累计税费（万元）": tax_year,
-        "当日交易量（亿元）": result["交易量（亿元）"],
-        "本年度日均占资（亿元）": result["日均占资（亿元）"],
-        "时点占资（亿元）": result["时点占资（亿元）"],
-        "当日日终持仓（亿元）": result["当日日终持仓（亿元）"],
-    }
-    formula_cells = {
-        "本年总收益（万元）": '=IF(ISNUMBER(前一日数据!B4),B3+前一日数据!B4,"待补前日累计")',
-        "本年累计交易量（亿元）": '=IF(ISNUMBER(前一日数据!B8),B7+前一日数据!B8,"待补前日累计")',
-        "绝对收益率": '=IF(AND(ISNUMBER(B4),ISNUMBER(B9)),IF(B9=0,"缺数据",B4/B9/10000),"缺数据")',
-        "年化收益率": '=IF(ISNUMBER(B12),B12*365/(A1-I1),"缺数据")',
-    }
-    for i, lab in enumerate(labels):
-        row = 3 + i
-        s_prev.cell(row=row, column=1, value=lab)
-        s_prev.cell(row=row, column=2, value=prev_vals.get(lab))
-        s_new.cell(row=row, column=1, value=lab)
-        if lab in formula_cells:
-            s_new.cell(row=row, column=2, value=formula_cells[lab])
-        else:
-            s_new.cell(row=row, column=2, value=value_cells.get(lab))
-    out3 = os.path.join(args.outdir, f"{d}销售交易部当日盈利情况.xlsx")
-    for sheet in (s_prev, s_new):
-        format_report(sheet, 2)
-        sheet['A1'].number_format = 'yyyy-mm-dd'
-        sheet['I1'].number_format = 'yyyy-mm-dd'
-        sheet['B12'].number_format = PERCENT
-        sheet['B13'].number_format = PERCENT
-        sheet['B4'].number_format = NUMBER
-        sheet['B8'].number_format = NUMBER
-        sheet.column_dimensions['A'].width = 43
-        sheet.column_dimensions['B'].width = 28
-    try:
-        wb3.save(out3)
-    except PermissionError:
-        print(f"[跳过] {out3} 正被 Excel/WPS 占用，请关闭后重跑")
-
-    print(f"[生成] {out1}")
-    if prev_cls:
-        print(f"[生成] {out2}")
-    if prev_pnl:
-        print(f"[生成] {out3}")
-    if args.tax_month is None or args.tax_year is None:
-        print("[注意] 应交税费/累计税费未提供（--tax-month/--tax-year），已沿用前一日数值；"
-              "请到估值系统-财务账簿-会计科目余额表查询后手工填写。")
-    if today.weekday() == 3 and not args.chai:
-        print("[注意] 今天是周四，拆借成本只在周四计算，请向用户确认后通过 --chai 传入（负数）。")
+    from template_reports import write_reports
+    write_reports(result, args, today, find_prev, parse_date, skip_class)
 
 
 if __name__ == "__main__":

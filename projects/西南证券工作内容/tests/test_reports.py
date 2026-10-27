@@ -90,6 +90,22 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual(data['撮合（万元）'], .01)
             self.assertFalse(data['有需人工确认项'])
             self.assertEqual(data['逐笔结算金额差'][0]['买入结算金额'], 1100)
+            coupons = base / 'coupons.json'
+            coupons.write_text(json.dumps({'date': '2026-01-02', 'source': '合成付息审核',
+                'payments': {'012345': 2}}), encoding='utf-8')
+            paid = json.loads(subprocess.run(cmd + ['--coupons', str(coupons)], check=True,
+                              capture_output=True, encoding='utf-8').stdout)
+            self.assertEqual(paid['总结算金额差（元）'], 2)
+            self.assertEqual(paid['撮合（万元）'], .0102)
+            executing_buy = trade('5', '买入', 1000, '10:00:00', '交易执行中', day='2026-01-02')
+            executing_buy[7] = '999999'
+            workbook(today, [HEAD, trade('4', '卖出', 1200, '09:00:00', day='2026-01-02'), executing_buy])
+            selected = json.loads(subprocess.run(cmd, check=True, capture_output=True, encoding='utf-8').stdout)
+            self.assertEqual(selected['排除的交易编号'], ['5'])
+            included = json.loads(subprocess.run(cmd + ['--trade-statuses', '成交确认', '交易执行中'],
+                                  check=True, capture_output=True, encoding='utf-8').stdout)
+            self.assertEqual(included['排除的交易编号'], [])
+            self.assertAlmostEqual(included['交易量（亿元）'] - selected['交易量（亿元）'], .00001)
 
 
 if __name__ == '__main__':
