@@ -42,9 +42,10 @@
     持仓表格式的 Excel（列序与「销售交易部持仓表.xlsx」一致 A~S 业务列）
     不用管的列（舆情、内评、卖出结算日等）留空。
 
-口径约定：
-    「率」类字段（票面 D、买入收益率 E、中债估值 P）统一用**百分比数值**，
-    即 4.2 表示 4.2%（不再用 0.042 小数）。
+口径约定（对齐「输出模板.xlsx」，用户 2026-10-27 明确）：
+    表头在第 4 行（前 3 行留白），共 30 列 A~AD（A~S 业务列 + T~AD 汇总列）。
+    「率」类字段（票面 D、买入收益率 E、中债估值 P）存**小数**（0.042 = 4.2%），
+    配合百分比格式显示（D 用 0.00%，E/P 用 0.0000%）。
 
 公式（已验证）：
     面值 = 数量(万) * 10000 元
@@ -63,6 +64,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
 
 
 def parse_date(s):
@@ -295,16 +297,85 @@ def process_bond(b, settle_date):
     return row
 
 
+def _set_rate(ws, coord, pct_value, border, fmt):
+    """率类字段：百分比数值 -> 小数（/100），配合百分比格式显示。"""
+    cell = ws[coord]
+    if pct_value is None or pct_value == "":
+        cell.value = None
+    else:
+        cell.value = float(pct_value) / 100.0
+        cell.number_format = fmt
+    cell.border = border
+
+
+def _set_num(ws, coord, value, border, fmt):
+    """数值字段：写值 + 数字格式。"""
+    cell = ws[coord]
+    if value is None or value == "":
+        cell.value = None
+    else:
+        cell.value = value
+        cell.number_format = fmt
+    cell.border = border
+
+
+def _write_row(ws, r_idx, row, border):
+    """写一行数据，处理各列数字格式与公式（对齐「输出模板.xlsx」）。"""
+    # 文本/空列
+    for col in ["A", "B", "C", "F", "G", "H", "M", "N", "O"]:
+        val = row.get(col, "")
+        cell = ws[f"{col}{r_idx}"]
+        cell.value = val if val not in ("", None) else None
+        cell.border = border
+
+    # 率类（票面 D、买入收益率 E、中债估值 P）：存小数
+    _set_rate(ws, f"D{r_idx}", row.get("D"), border, "0.00%")
+    _set_rate(ws, f"E{r_idx}", row.get("E"), border, "0.0000%")
+    _set_rate(ws, f"P{r_idx}", row.get("P"), border, "0.0000%")
+
+    # 数值列
+    _set_num(ws, f"I{r_idx}", row.get("I"), border, "0")           # 买入数量（万，整数）
+    _set_num(ws, f"J{r_idx}", row.get("J"), border, "#,##0.00")    # 结算金额
+    _set_num(ws, f"Q{r_idx}", row.get("Q"), border, "#,##0.00")    # 资本利得
+    _set_num(ws, f"S{r_idx}", row.get("S"), border, "0.00")        # 剩余规模（亿）
+
+    # 买入结算日 K：日期 + 中文日期格式
+    kc = ws[f"K{r_idx}"]
+    kc.value = row.get("K")
+    kc.number_format = 'm"月"d"日"'
+    kc.border = border
+
+    # 持仓工作日 L：公式（交易日数，排除周末；节假日区域 A137:A142 预留）
+    lc = ws[f"L{r_idx}"]
+    lc.value = f'=NETWORKDAYS(K{r_idx},TODAY(),$A$137:$A$142)'
+    lc.border = border
+
+    # 每日票息 R：公式 =E*I/365*10000（E 为小数，仅当 E 有值时写）
+    rc = ws[f"R{r_idx}"]
+    if row.get("E") is not None:
+        rc.value = f'=E{r_idx}*I{r_idx}/365*10000'
+        rc.number_format = "0.0000"
+    rc.border = border
+
+    # T~AD 汇总列：留空（用户后续填/加公式），仅加边框
+    for i in range(20, 31):  # 20=T ... 30=AD
+        ws[f"{get_column_letter(i)}{r_idx}"].border = border
+
+
 def build_workbook(rows, settle_date, out_path):
-    """生成持仓表 Excel。"""
+    """生成持仓表 Excel（格式对齐「输出模板.xlsx」）。"""
     wb = Workbook()
     ws = wb.active
     ws.title = "买入记录"
 
+    # 30 列表头（A~AD）
     headers = [
         "简称", "代码", "剩余年限", "票面", "买入收益率", "主体/债项评级", "舆情",
         "担保/非担保", "买入数量（万）", "结算金额（元）", "买入结算日", "持仓工作日（参考）",
         "卖出结算日", "主办人", "内评", "当日中债估值（%）", "资本利得", "每日票息", "剩余规模",
+        "具体舆情", "部门本周资金成本", "中低评级合计\n（合计不超15亿）", "AA持仓数量",
+        "AA结算金额\n（事业部不超5亿）", "AA+持仓数量", "AA+结算金额", "票息总额",
+        "每日融资收益率", "加权平均收益率", "持仓收益率",
     ]
 
     # 表头样式
@@ -314,38 +385,27 @@ def build_workbook(rows, settle_date, out_path):
     thin = Side(style="thin", color="CCCCCC")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    # 写表头
+    # 表头写在第 4 行（前 3 行留白，对齐模板）
+    HEADER_ROW = 4
     for i, h in enumerate(headers, start=1):
-        c = ws.cell(row=1, column=i, value=h)
+        c = ws.cell(row=HEADER_ROW, column=i, value=h)
         c.font = header_font
         c.fill = header_fill
         c.alignment = center
         c.border = border
 
-    # 列宽
-    widths = [20, 16, 14, 10, 12, 14, 8, 12, 14, 16, 12, 16, 12, 10, 8, 16, 12, 10, 10]
+    # 列宽（对齐模板 A~S；T~AD 用默认 14）
+    widths = [
+        42.71, 42.71, 32.50, 29.71, 20.71, 25.71, 35.20, 16.18, 24.28, 28.32,
+        34.26, 56.51, 32.50, 24.28, 20.23, 16.18, 33.71, 25.71, 20.71, 20.71,
+        14, 14, 14, 14, 14, 14, 14, 14, 14, 14,
+    ]
     for i, w in enumerate(widths, start=1):
-        ws.column_dimensions[chr(64 + i)].width = w
+        ws.column_dimensions[get_column_letter(i)].width = w
 
-    # 写数据行
-    col_order = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S"]
-    for r_idx, row in enumerate(rows, start=2):
-        for c_idx, col in enumerate(col_order, start=1):
-            val = row.get(col, "")
-            cell = ws.cell(row=r_idx, column=c_idx, value=val if val != "" else None)
-            cell.border = border
-            if col in ("D", "E", "P"):  # 率类字段，存百分比数值（4.2 = 4.2%）
-                if isinstance(val, float):
-                    cell.number_format = "0.0000\"%\""
-            elif col in ("J", "Q"):  # 金额
-                if isinstance(val, float):
-                    cell.number_format = "#,##0.00"
-            elif col in ("R",):
-                if isinstance(val, float):
-                    cell.number_format = "0.0000"
-            elif col in ("S",):
-                if isinstance(val, float):
-                    cell.number_format = "0.0"
+    # 数据行（从第 5 行开始）
+    for r_idx, row in enumerate(rows, start=HEADER_ROW + 1):
+        _write_row(ws, r_idx, row, border)
 
     wb.save(out_path)
     return out_path
